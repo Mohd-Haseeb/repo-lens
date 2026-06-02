@@ -9,6 +9,13 @@ This version is intentionally simple and learning-oriented:
 - formatters render text or JSON output
 - tests exercise the analysis layer without depending on the terminal UI
 
+The scanner currently surfaces:
+
+- source, test, documentation, and config counts
+- common source and test directories
+- license, CI, dependency, and project metadata files
+- findings for missing onboarding or project-hygiene signals
+
 ## Run locally
 
 ```bash

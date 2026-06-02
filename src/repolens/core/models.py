@@ -37,6 +37,10 @@ class ScanReport:
     largest_files: list[FileStat]
     source_directories: list[str]
     test_directories: list[str]
+    license_files: list[str]
+    ci_files: list[str]
+    dependency_files: list[str]
+    project_metadata_files: list[str]
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

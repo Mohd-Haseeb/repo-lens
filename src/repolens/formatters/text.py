@@ -32,6 +32,12 @@ def _render_text(report: ScanReport) -> str:
         f"  source: {', '.join(report.source_directories) if report.source_directories else 'none'}",
         f"  tests: {', '.join(report.test_directories) if report.test_directories else 'none'}",
         "",
+        "Project signals",
+        f"  license: {', '.join(report.license_files) if report.license_files else 'none'}",
+        f"  ci: {', '.join(report.ci_files) if report.ci_files else 'none'}",
+        f"  dependencies: {', '.join(report.dependency_files) if report.dependency_files else 'none'}",
+        f"  metadata: {', '.join(report.project_metadata_files) if report.project_metadata_files else 'none'}",
+        "",
         "Largest files",
     ]
 
