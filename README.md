@@ -15,6 +15,10 @@ This version is intentionally simple and learning-oriented:
 PYTHONPATH=src python3 -m repolens scan .
 ```
 
+```bash
+PYTHONPATH=src python3 -m repolens --version
+```
+
 ## Run tests
 
 ```bash
