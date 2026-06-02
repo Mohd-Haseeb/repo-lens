@@ -28,6 +28,14 @@ SOURCE_SUFFIXES = {
 }
 
 DOC_FILENAMES = {"readme.md", "readme.txt", "readme"}
+LICENSE_FILENAMES = {
+    "license",
+    "license.md",
+    "license.txt",
+    "copying",
+    "copying.md",
+    "copying.txt",
+}
 CONFIG_FILENAMES = {
     "pyproject.toml",
     "package.json",
@@ -35,6 +43,38 @@ CONFIG_FILENAMES = {
     "go.mod",
     "cargo.toml",
     "makefile",
+}
+DEPENDENCY_FILENAMES = {
+    "cargo.lock",
+    "composer.lock",
+    "go.sum",
+    "package-lock.json",
+    "pdm.lock",
+    "pipfile",
+    "pipfile.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "requirements.txt",
+    "uv.lock",
+    "yarn.lock",
+}
+PROJECT_METADATA_FILENAMES = {
+    "build.gradle",
+    "cargo.toml",
+    "composer.json",
+    "gemfile",
+    "go.mod",
+    "package.json",
+    "pom.xml",
+    "pyproject.toml",
+    "setup.cfg",
+    "setup.py",
+}
+CI_FILENAMES = {
+    ".gitlab-ci.yml",
+    ".gitlab-ci.yaml",
+    "azure-pipelines.yml",
+    "azure-pipelines.yaml",
 }
 
 
@@ -56,6 +96,10 @@ def analyze_repository(root: Path) -> ScanReport:
         largest_files=sorted(file_stats, key=lambda stat: stat.size_bytes, reverse=True)[:5],
         source_directories=_collect_directories(file_stats, "source"),
         test_directories=_collect_directories(file_stats, "test"),
+        license_files=_collect_matching_paths(file_stats, _is_license_file),
+        ci_files=_collect_matching_paths(file_stats, _is_ci_file),
+        dependency_files=_collect_matching_paths(file_stats, _is_dependency_file),
+        project_metadata_files=_collect_matching_paths(file_stats, _is_project_metadata_file),
     )
 
 
@@ -89,9 +133,9 @@ def _categorize(path: Path) -> str:
 
     if "tests" in lowered_parts or filename.startswith("test_") or filename.endswith("_test.py"):
         return "test"
-    if filename in DOC_FILENAMES or path.suffix.lower() in {".md", ".rst"}:
+    if filename in DOC_FILENAMES or filename in LICENSE_FILENAMES or path.suffix.lower() in {".md", ".rst"}:
         return "documentation"
-    if filename in CONFIG_FILENAMES:
+    if filename in CONFIG_FILENAMES or _is_dependency_file(path) or _is_ci_file(path):
         return "config"
     if path.suffix.lower() in SOURCE_SUFFIXES:
         return "source"
@@ -142,8 +186,44 @@ def _collect_directories(file_stats: list[FileStat], category: str) -> list[str]
     return sorted(directories)
 
 
+def _collect_matching_paths(file_stats: list[FileStat], predicate) -> list[str]:
+    return sorted(stat.path for stat in file_stats if predicate(Path(stat.path)))
+
+
+def _is_license_file(path: Path) -> bool:
+    return path.name.lower() in LICENSE_FILENAMES
+
+
+def _is_dependency_file(path: Path) -> bool:
+    filename = path.name.lower()
+    return filename in DEPENDENCY_FILENAMES or (
+        filename.startswith("requirements") and path.suffix.lower() == ".txt"
+    )
+
+
+def _is_project_metadata_file(path: Path) -> bool:
+    return path.name.lower() in PROJECT_METADATA_FILENAMES
+
+
+def _is_ci_file(path: Path) -> bool:
+    parts = [part.lower() for part in path.parts]
+    filename = path.name.lower()
+
+    if filename in CI_FILENAMES:
+        return True
+    if len(parts) >= 3 and parts[0] == ".github" and parts[1] == "workflows":
+        return path.suffix.lower() in {".yml", ".yaml"}
+    if len(parts) >= 2 and parts[0] == ".circleci" and parts[1] == "config.yml":
+        return True
+    return False
+
+
 def _build_findings(root: Path, summary: Summary, file_stats: list[FileStat]) -> list[Finding]:
     findings: list[Finding] = []
+    license_files = _collect_matching_paths(file_stats, _is_license_file)
+    ci_files = _collect_matching_paths(file_stats, _is_ci_file)
+    dependency_files = _collect_matching_paths(file_stats, _is_dependency_file)
+    project_metadata_files = _collect_matching_paths(file_stats, _is_project_metadata_file)
 
     readme_present = any(Path(stat.path).name.lower() in DOC_FILENAMES for stat in file_stats)
     if not readme_present:
@@ -161,6 +241,42 @@ def _build_findings(root: Path, summary: Summary, file_stats: list[FileStat]) ->
                 code="missing-tests",
                 severity="high",
                 message="Source files exist but no tests were detected.",
+            )
+        )
+
+    if summary.source_files > 0 and not license_files:
+        findings.append(
+            Finding(
+                code="missing-license",
+                severity="low",
+                message="Repository has source code but no license file was detected.",
+            )
+        )
+
+    if summary.source_files > 0 and not project_metadata_files:
+        findings.append(
+            Finding(
+                code="missing-project-metadata",
+                severity="low",
+                message="Source files exist but no common project metadata file was detected.",
+            )
+        )
+
+    if dependency_files and summary.source_files > 0 and summary.test_files == 0:
+        findings.append(
+            Finding(
+                code="dependencies-without-tests",
+                severity="medium",
+                message="Dependency files exist, but no tests were detected for the source code.",
+            )
+        )
+
+    if summary.source_files > 0 and summary.test_files > 0 and not ci_files:
+        findings.append(
+            Finding(
+                code="missing-ci",
+                severity="low",
+                message="Source and test files exist, but no common CI configuration was detected.",
             )
         )
 
